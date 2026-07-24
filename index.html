@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-50">
+<head>
+    <!-- STREAMING_CHUNK:Configuring document head, meta, and CDN dependencies... -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ascTimetables WebApp - Jadwal Pelajaran</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#2563eb',
+                            600: '#1d4ed8',
+                            700: '#1e40af'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome & Chart.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- SheetJS (xlsx) for Importing Excel Workload Matrix files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Inline PWA Manifest Data URI -->
+    <link rel="manifest" href="data:application/manifest+json;utf8,%7B%22name%22%3A%22ascTimetables%20WebApp%22%2C%22short_name%22%3A%22Jadwal%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23ffffff%22%2C%22theme_color%22%3A%22%232563eb%22%7D">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        
+        /* Print Styles for A4 / A3 */
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; font-size: 9pt; color: #000 !important; }
+            .print-container { width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; }
+            
+            .paper-a4 { page-break-after: always; }
+            .paper-a3 { page-break-after: always; }
+
+            @page {
+                margin: 6mm;
+            }
+            @page :left { margin: 6mm; }
+            @page :right { margin: 6mm; }
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- STREAMING_CHUNK:Rendering header and navigation components... -->
+    <!-- Top Header Bar -->
+    <header class="no-print glass-panel sticky top-0 z-30 shadow-sm border-b border-slate-200/80 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-blue-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                <i class="fa-solid fa-calendar-days text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight text-slate-900">ascTimetables <span class="text-brand-600 font-extrabold">Pro</span></h1>
+                <p class="text-xs text-slate-500">Sistem Penjadwalan Pelajaran Sekolah (6 Hari Kerja)</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <div id="userBadge" class="hidden md:flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 text-xs">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="userName" class="font-semibold text-slate-700">Tamu</span>
+                <span id="userRole" class="text-slate-400 border-l border-slate-300 pl-2">Pengunjung</span>
+            </div>
+            <button onclick="toggleAuthModal()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition-all flex items-center gap-2">
+                <i class="fa-solid fa-right-to-bracket"></i>
+                <span>Login</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Desktop Sidebar -->
+        <aside class="no-print hidden md:flex flex-col w-64 glass-panel border-r border-slate-200/80 p-4 space-y-1 overflow-y-auto">
+            <div class="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-400">Navigasi Utama</div>
+            
+            <button onclick="navigateTo('dashboard')" id="nav-dashboard" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-brand-600 bg-brand-50 transition-colors">
+                <i class="fa-solid fa-chart-pie w-5 text-center"></i>
+                <span>Dashboard & Analistik</span>
+            </button>
+
+            <button onclick="navigateTo('competencies')" id="nav-competencies" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-graduation-cap w-5 text-center"></i>
+                <span>Kompetensi Keahlian</span>
+            </button>
+
+            <button onclick="navigateTo('teachers')" id="nav-teachers" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-user-tie w-5 text-center"></i>
+                <span>Data Guru</span>
+            </button>
+
+            <button onclick="navigateTo('subjects')" id="nav-subjects" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-book-open w-5 text-center"></i>
+                <span>Mata Pelajaran</span>
+            </button>
+
+            <button onclick="navigateTo('classes')" id="nav-classes" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-chalkboard-user w-5 text-center"></i>
+                <span>Rombel / Kelas</span>
+            </button>
+
+            <div class="pt-4 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-400">Penjadwalan</div>
+
+            <button onclick="navigateTo('assignments')" id="nav-assignments" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-list-check w-5 text-center"></i>
+                <span>Penugasan Mengampu</span>
+            </button>
+
+            <button onclick="navigateTo('generator')" id="nav-generator" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-wand-magic-sparkles w-5 text-center"></i>
+                <span>Generator & Manual Swap</span>
+            </button>
+
+            <button onclick="navigateTo('matrix')" id="nav-matrix" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-table-cells w-5 text-center"></i>
+                <span>Matriks ascTimetables</span>
+            </button>
+
+            <button onclick="navigateTo('print')" id="nav-print" class="nav-item flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-print w-5 text-center"></i>
+                <span>Cetak & Ekspor</span>
+            </button>
+        </aside>
+
+        <!-- STREAMING_CHUNK:Setting up main canvas workspace... -->
+        <!-- Main Content Canvas Area -->
+        <main id="mainContainer" class="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
+            <!-- Dynamic Content Injected via JS -->
+        </main>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="no-print md:hidden fixed bottom-0 left-0 right-0 glass-panel border-t border-slate-200/80 px-2 py-2 flex justify-around items-center z-30 shadow-lg">
+        <button onclick="navigateTo('dashboard')" class="flex flex-col items-center text-xs font-medium text-brand-600">
+            <i class="fa-solid fa-chart-pie text-lg mb-0.5"></i>
+            <span>Dashboard</span>
+        </button>
+        <button onclick="navigateTo('assignments')" class="flex flex-col items-center text-xs font-medium text-slate-500">
+            <i class="fa-solid fa-list-check text-lg mb-0.5"></i>
+            <span>Penugasan</span>
+        </button>
+        <button onclick="navigateTo('generator')" class="flex flex-col items-center text-xs font-medium text-slate-500">
+            <i class="fa-solid fa-wand-magic-sparkles text-lg mb-0.5"></i>
+            <span>Generate</span>
+        </button>
+        <button onclick="navigateTo('matrix')" class="flex flex-col items-center text-xs font-medium text-slate-500">
+            <i class="fa-solid fa-table-cells text-lg mb-0.5"></i>
+            <span>Matriks</span>
+        </button>
+        <button onclick="navigateTo('print')" class="flex flex-col items-center text-xs font-medium text-slate-500">
+            <i class="fa-solid fa-print text-lg mb-0.5"></i>
+            <span>Cetak</span>
+        </button>
+    </nav>
+
+    <!-- STREAMING_CHUNK:Building modal dialogs for entity inputs... -->
+    <!-- Form Modals -->
+    <div id="dataModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-100 relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeDataModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div id="modalTitle" class="text-lg font-bold text-slate-800 mb-1">Judul Modal</div>
+            <div id="modalSub" class="text-xs text-slate-500 mb-4">Subjudul Modal</div>
+            <form id="dataModalForm" onsubmit="handleModalSubmit(event)" class="space-y-4">
+                <div id="modalFormFields" class="space-y-3"></div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" onclick="closeDataModal()" class="px-4 py-2 bg-slate-100 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-200">Batal</button>
+                    <button type="submit" class="px-5 py-2 bg-brand-600 text-white text-xs font-semibold rounded-xl hover:bg-brand-700 shadow-md">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100 relative">
+            <button onclick="toggleAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <h2 class="text-xl font-bold text-slate-800 mb-1">Masuk ke Sistem</h2>
+            <p class="text-xs text-slate-500 mb-6">Pilih jenis akses akun Anda di bawah ini.</p>
+
+            <div class="flex bg-slate-100 p-1 rounded-xl mb-6">
+                <button id="tabUserBtn" onclick="switchLoginTab('user')" class="flex-1 py-2 rounded-lg bg-white shadow-sm text-brand-600 font-semibold text-xs">User / Guru</button>
+                <button id="tabAdminBtn" onclick="switchLoginTab('admin')" class="flex-1 py-2 rounded-lg text-slate-500 hover:text-slate-700 font-semibold text-xs">Administrator</button>
+            </div>
+
+            <!-- User Login Form -->
+            <form id="userLoginForm" onsubmit="handleUserLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Username / Kode Guru</label>
+                    <input type="text" id="loginUsername" placeholder="Contoh: G-01" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="loginUserPass" value="user123" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl text-sm shadow-md transition-all">Masuk User</button>
+            </form>
+
+            <!-- Admin Login Form -->
+            <form id="adminLoginForm" onsubmit="handleAdminLogin(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Email Administrator</label>
+                    <input type="email" id="loginAdminEmail" placeholder="admin@sekolah.sch.id" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="loginAdminPass" value="admin123" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <button type="submit" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-sm shadow-md transition-all">Masuk Administrator</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Box -->
+    <div id="toastBox" class="fixed bottom-16 md:bottom-6 right-6 z-50 flex flex-col space-y-2"></div>
+
+    <!-- Hidden File Inputs -->
+    <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVFileSelected(event)">
+    <input type="file" id="excelMatrixFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelMatrixFileSelected(event)">
+
+    <!-- STREAMING_CHUNK:Initializing application state and logic... -->
+    <script>
+        // Application State Configuration
+        const IS_PREVIEW = true;
+        const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const PERIODS_PER_DAY = 10;
+        const BREAK_PERIOD = 4; // Jam ke-4 Istirahat
+
+        let modalActionType = '';
+
+        let state = {
+            currentUser: { name: 'Admin Kurikulum', role: 'Administrator' },
+            competencies: [
+                { id: 'RPL', code: 'RPL', name: 'Rekayasa Perangkat Lunak' },
+                { id: 'TKJ', code: 'TKJ', name: 'Teknik Komputer & Jaringan' },
+                { id: 'AKL', code: 'AKL', name: 'Akuntansi & Keuangan Lembaga' },
+                { id: 'TKR', code: 'TKR', name: 'Teknik Kendaraan Ringan' }
+            ],
+            teachers: [
+                { id: 'G01', code: 'J4', name: 'Bertolomeus Reba, S.Pd', nip: '197503122000031001', picketDays: ['Senin'], maxHours: 30 },
+                { id: 'G02', code: 'K', name: 'Maria Elisabeth Bhiju, A.Md', nip: '198205142006042002', picketDays: ['Rabu'], maxHours: 32 },
+                { id: 'G03', code: 'L', name: 'Egnisius Rawi, ST', nip: '197507042007011003', picketDays: ['Kamis'], maxHours: 28 },
+                { id: 'G04', code: 'L1', name: 'Petrus Bhoko, S.Pd', nip: '199002152015032001', picketDays: ['Jumat'], maxHours: 34 },
+                { id: 'G05', code: 'L2', name: 'Maria Crensiana Fono, S.Pd', nip: '198507082009021004', picketDays: ['Selasa'], maxHours: 30 }
+            ],
+            subjects: [
+                { id: 'SEJ', code: 'SEJ', name: 'Sejarah', category: 'Umum', color: '#2563eb' },
+                { id: 'PKKW', code: 'PKK', name: 'Produk Kreatif dan Kewirausahaan', category: 'Kejuruan', color: '#9333ea' },
+                { id: 'KJJ', code: 'KJJ', name: 'Konstruksi Jalan dan Jembatan', category: 'Kejuruan', color: '#059669' },
+                { id: 'DPK', code: 'DPK', name: 'Dasar-dasar Program Keahlian', category: 'Kejuruan', color: '#ea580c' },
+                { id: 'EBKP', code: 'EBKP', name: 'Estimasi Biaya Konstruksi dan Properti', category: 'Kejuruan', color: '#0891b2' }
+            ],
+            classes: [
+                { id: 'X_TKP', code: 'X TKP', name: 'Kelas X TKP', grade: 'X', maxWeeklyHours: 50 },
+                { id: 'X_DPIB', code: 'X DPIB', name: 'Kelas X DPIB', grade: 'X', maxWeeklyHours: 50 },
+                { id: 'X_TKR_1', code: 'X TKR 1', name: 'Kelas X TKR 1', grade: 'X', maxWeeklyHours: 50 },
+                { id: 'X_TKR_2', code: 'X TKR 2', name: 'Kelas X TKR 2', grade: 'X', maxWeeklyHours: 50 },
+                { id: 'XII_DPIB', code: 'XII DPIB', name: 'Kelas XII DPIB', grade: 'XII', maxWeeklyHours: 48 },
+                { id: 'XII_TKJ_1', code: 'XII TKJ 1', name: 'Kelas XII TKJ 1', grade: 'XII', maxWeeklyHours: 48 }
+            ],
+            assignments: [
+                { id: 'ASN_1', teacherId: 'G01', subjectId: 'SEJ', classIds: ['X_TKP', 'X_DPIB', 'X_TKR_1', 'X_TKR_2'], totalHours: 2, splitPattern: [2] },
+                { id: 'ASN_2', teacherId: 'G02', subjectId: 'PKKW', classIds: ['XII_DPIB', 'XII_TKJ_1'], totalHours: 8, splitPattern: [4, 4] },
+                { id: 'ASN_3', teacherId: 'G03', subjectId: 'KJJ', classIds: ['XII_DPIB'], totalHours: 5, splitPattern: [3, 2] },
+                { id: 'ASN_4', teacherId: 'G04', subjectId: 'EBKP', classIds: ['XII_DPIB'], totalHours: 5, splitPattern: [3, 2] }
+            ],
+            schedules: [],
+            activeMatrixTheme: 'theme-classic',
+            activeDisplayMode: 'code',
+            activeSubjectTab: 'all',
+            printMode: 'all',
+            printSelectedId: 'all',
+            printPaperSize: 'a4'
+        };
+
+        // Service Worker Dynamic Blob Injection for PWA
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                self.addEventListener('install', e => self.skipWaiting());
+                self.addEventListener('activate', e => self.clients.claim());
+                self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => new Response('Offline'))));
+            `;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+        }
+
+        // STREAMING_CHUNK:Defining UI helper and navigation handlers...
+        window.toggleAuthModal = function() {
+            const modal = document.getElementById('authModal');
+            if (modal) modal.classList.toggle('hidden');
+        };
+
+        window.switchLoginTab = function(type) {
+            const userTab = document.getElementById('tabUserBtn');
+            const adminTab = document.getElementById('tabAdminBtn');
+            const userForm = document.getElementById('userLoginForm');
+            const adminForm = document.getElementById('adminLoginForm');
+
+            if (type === 'user') {
+                userTab.className = 'flex-1 py-2 rounded-lg bg-white shadow-sm text-brand-600 font-semibold text-xs';
+                adminTab.className = 'flex-1 py-2 rounded-lg text-slate-500 hover:text-slate-700 font-semibold text-xs';
+                userForm.classList.remove('hidden');
+                adminForm.classList.add('hidden');
+            } else {
+                adminTab.className = 'flex-1 py-2 rounded-lg bg-white shadow-sm text-brand-600 font-semibold text-xs';
+                userTab.className = 'flex-1 py-2 rounded-lg text-slate-500 hover:text-slate-700 font-semibold text-xs';
+                adminForm.classList.remove('hidden');
+                userForm.classList.add('hidden');
+            }
+        };
+
+        window.handleUserLogin = function(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            state.currentUser = { name: username || 'Guru User', role: 'Guru / User' };
+            updateUserUI();
+            toggleAuthModal();
+            showToast(`Selamat datang, ${username}!`, 'success');
+        };
+
+        window.handleAdminLogin = function(e) {
+            e.preventDefault();
+            state.currentUser = { name: 'Admin Kurikulum', role: 'Administrator' };
+            updateUserUI();
+            toggleAuthModal();
+            showToast('Berhasil masuk sebagai Administrator!', 'success');
+        };
+
+        window.updateUserUI = function() {
+            const userNameEl = document.getElementById('userName');
+            const userRoleEl = document.getElementById('userRole');
+            if (userNameEl) userNameEl.textContent = state.currentUser.name;
+            if (userRoleEl) userRoleEl.textContent = state.currentUser.role;
+        };
+
+        window.showToast = function(msg, type = 'info') {
+            const box = document.getElementById('toastBox');
+            if (!box) return;
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-xl shadow-lg text-xs font-semibold text-white transition-all transform translate-y-2 ${type === 'success' ? 'bg-emerald-600' : 'bg-brand-600'}`;
+            toast.innerHTML = `<i class="fa-solid fa-circle-info mr-2"></i>${msg}`;
+            box.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        };
+
+        window.navigateTo = function(viewId) {
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('bg-brand-50', 'text-brand-600');
+                el.classList.add('text-slate-600');
+            });
+            const activeNav = document.getElementById(`nav-${viewId}`);
+            if (activeNav) {
+                activeNav.classList.add('bg-brand-50', 'text-brand-600');
+                activeNav.classList.remove('text-slate-600');
+            }
+
+            const main = document.getElementById('mainContainer');
+            if (!main) return;
+
+            if (viewId === 'dashboard') renderDashboard(main);
+            else if (viewId === 'competencies') renderCompetencies(main);
+            else if (viewId === 'teachers') renderTeachers(main);
+            else if (viewId === 'subjects') renderSubjects(main);
+            else if (viewId === 'classes') renderClasses(main);
+            else if (viewId === 'assignments') renderAssignments(main);
+            else if (viewId === 'generator') renderGenerator(main);
+            else if (viewId === 'matrix') renderMatrix(main);
+            else if (viewId === 'print') renderPrint(main);
+        };
+
+        // STREAMING_CHUNK:Implementing Dashboard & Analytics views...
+        function renderDashboard(container) {
+            const teacherStats = state.teachers.map(t => {
+                const teacherAsns = state.assignments.filter(a => a.teacherId === t.id);
+                let totalJJM = 0;
+                let rombelSet = new Set();
+                teacherAsns.forEach(a => {
+                    totalJJM += (a.totalHours * a.classIds.length);
+                    a.classIds.forEach(c => rombelSet.add(c));
+                });
+                return { name: t.name, code: t.code, jjm: totalJJM, rombelCount: rombelSet.size };
+            });
+
+            const sortedJJM = [...teacherStats].sort((a,b) => b.jjm - a.jjm);
+            const sortedRombel = [...teacherStats].sort((a,b) => b.rombelCount - a.rombelCount);
+
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80">
+                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Guru</div>
+                            <div class="text-2xl font-black text-slate-800 mt-1">${state.teachers.length} Guru</div>
+                        </div>
+                        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80">
+                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Rombel</div>
+                            <div class="text-2xl font-black text-brand-600 mt-1">${state.classes.length} Kelas</div>
+                        </div>
+                        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80">
+                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Mata Pelajaran</div>
+                            <div class="text-2xl font-black text-emerald-600 mt-1">${state.subjects.length} Mapel</div>
+                        </div>
+                        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80">
+                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Hari Efektif</div>
+                            <div class="text-2xl font-black text-purple-600 mt-1">6 Hari (Senin-Sabtu)</div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Analytics JJM and Rombel -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-clock text-brand-600"></i> Beban Mengajar Guru (JJM Terbanyak & Tersedikit)
+                            </h3>
+                            <div class="relative h-64 md:h-72 w-full overflow-hidden">
+                                <canvas id="jjmChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-users-rectangle text-emerald-600"></i> Jumlah Rombel Ditangani Per Guru
+                            </h3>
+                            <div class="relative h-64 md:h-72 w-full overflow-hidden">
+                                <canvas id="rombelChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const ctxJJM = document.getElementById('jjmChart');
+                if (ctxJJM) {
+                    if (window.jjmChartInstance) window.jjmChartInstance.destroy();
+                    window.jjmChartInstance = new Chart(ctxJJM, {
+                        type: 'bar',
+                        data: {
+                            labels: sortedJJM.map(s => s.code),
+                            datasets: [{
+                                label: 'Total Jam Mengajar (JJM)',
+                                data: sortedJJM.map(s => s.jjm),
+                                backgroundColor: '#2563eb',
+                                borderRadius: 8
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            scales: { y: { beginAtZero: true, ticks: { stepSize: 2 } } }
+                        }
+                    });
+                }
+
+                const ctxRombel = document.getElementById('rombelChart');
+                if (ctxRombel) {
+                    if (window.rombelChartInstance) window.rombelChartInstance.destroy();
+                    window.rombelChartInstance = new Chart(ctxRombel, {
+                        type: 'bar',
+                        data: {
+                            labels: sortedRombel.map(s => s.code),
+                            datasets: [{
+                                label: 'Jumlah Rombel',
+                                data: sortedRombel.map(s => s.rombelCount),
+                                backgroundColor: '#10b981',
+                                borderRadius: 8
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                        }
+                    });
+                }
+            }, 100);
+        }
+
+        // STREAMING_CHUNK:Rendering CRUD modules for competencies, teachers, subjects, classes...
+        function renderCompetencies(container) {
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Kompetensi Keahlian (Jurusan)</h2>
+                            <p class="text-xs text-slate-500">Kelola daftar jurusan/kompetensi keahlian sekolah.</p>
+                        </div>
+                        <button onclick="openAddCompetencyModal()" class="px-4 py-2 bg-brand-600 text-white font-semibold text-xs rounded-xl shadow hover:bg-brand-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i> Tambah Jurusan
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 font-bold uppercase text-slate-400">
+                                <tr>
+                                    <th class="p-3">Kode</th>
+                                    <th class="p-3">Nama Kompetensi Keahlian</th>
+                                    <th class="p-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${state.competencies.map(c => `
+                                    <tr>
+                                        <td class="p-3 font-bold text-slate-800">${c.code}</td>
+                                        <td class="p-3">${c.name}</td>
+                                        <td class="p-3 text-right">
+                                            <button onclick="deleteCompetency('${c.id}')" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTeachers(container) {
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Data Guru & Tugas Piket</h2>
+                            <p class="text-xs text-slate-500">Hari piket otomatis memblokir jadwal mengajar guru pada hari tersebut.</p>
+                        </div>
+                        <button onclick="openAddTeacherModal()" class="px-4 py-2 bg-brand-600 text-white font-semibold text-xs rounded-xl shadow hover:bg-brand-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i> Tambah Guru
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 font-bold uppercase text-slate-400">
+                                <tr>
+                                    <th class="p-3">Kode</th>
+                                    <th class="p-3">NIP</th>
+                                    <th class="p-3">Nama Lengkap Guru</th>
+                                    <th class="p-3">Max JP</th>
+                                    <th class="p-3">Hari Piket (Kosong Mengajar)</th>
+                                    <th class="p-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${state.teachers.map(t => `
+                                    <tr>
+                                        <td class="p-3 font-bold text-slate-800">${t.code}</td>
+                                        <td class="p-3 text-slate-500 font-mono">${t.nip || '-'}</td>
+                                        <td class="p-3 font-medium text-slate-800">${t.name}</td>
+                                        <td class="p-3 font-semibold text-brand-600">${t.maxHours || 30} JP</td>
+                                        <td class="p-3"><span class="px-2 py-1 bg-amber-100 text-amber-800 font-semibold rounded-lg text-[11px]">${t.picketDays.join(', ') || 'Tidak Ada'}</span></td>
+                                        <td class="p-3 text-right">
+                                            <button onclick="deleteTeacher('${t.id}')" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSubjects(container) {
+            const generalSubjects = state.subjects.filter(s => s.category === 'Umum');
+            const vocationalSubjects = state.subjects.filter(s => s.category === 'Kejuruan');
+
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Master Mata Pelajaran</h2>
+                            <p class="text-xs text-slate-500">Pengelompokan Kelompok Mapel Umum dan Kelompok Mapel Kejuruan.</p>
+                        </div>
+                        <button onclick="openAddSubjectModal()" class="px-4 py-2 bg-brand-600 text-white font-semibold text-xs rounded-xl shadow hover:bg-brand-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i> Tambah Mapel
+                        </button>
+                    </div>
+
+                    <div class="flex border-b border-slate-200 space-x-4">
+                        <button onclick="switchSubjectTab('all')" class="pb-2 text-xs font-bold ${state.activeSubjectTab === 'all' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-400 hover:text-slate-600'}">Semua Mapel (${state.subjects.length})</button>
+                        <button onclick="switchSubjectTab('Umum')" class="pb-2 text-xs font-bold ${state.activeSubjectTab === 'Umum' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-400 hover:text-slate-600'}">Kelompok Umum (${generalSubjects.length})</button>
+                        <button onclick="switchSubjectTab('Kejuruan')" class="pb-2 text-xs font-bold ${state.activeSubjectTab === 'Kejuruan' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-400 hover:text-slate-600'}">Kelompok Kejuruan (${vocationalSubjects.length})</button>
+                    </div>
+
+                    <div id="subjectCardsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${(state.activeSubjectTab === 'all' ? state.subjects : state.subjects.filter(s => s.category === state.activeSubjectTab)).map(s => `
+                            <div class="p-4 rounded-xl border border-slate-200 flex items-center justify-between" style="border-left: 6px solid ${s.color}">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-sm text-slate-800">${s.code} - ${s.name}</span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${s.category === 'Kejuruan' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${s.category || 'Umum'}</span>
+                                    </div>
+                                    <div class="text-xs text-slate-400 mt-1">Penanda Visual Matriks</div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-6 h-6 rounded-full shadow-inner" style="background-color: ${s.color}"></div>
+                                    <button onclick="deleteSubject('${s.id}')" class="text-slate-300 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        window.switchSubjectTab = function(tab) {
+            state.activeSubjectTab = tab;
+            renderSubjects(document.getElementById('mainContainer'));
+        };
+
+        function renderClasses(container) {
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Data Rombel & Standard Alokasi JP</h2>
+                            <p class="text-xs text-slate-500">Tingkat X: 50 JP/Minggu | Tingkat XI & XII: 48 JP/Minggu.</p>
+                        </div>
+                        <button onclick="openAddClassModal()" class="px-4 py-2 bg-brand-600 text-white font-semibold text-xs rounded-xl shadow hover:bg-brand-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i> Tambah Kelas
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${state.classes.map(c => `
+                            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                                <div>
+                                    <div class="font-bold text-sm text-slate-800">${c.code} (${c.name})</div>
+                                    <div class="text-xs text-slate-500">Tingkat ${c.grade} • Target: <span class="font-bold text-brand-600">${c.maxWeeklyHours} JP/Minggu</span></div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="px-3 py-1 rounded-full text-xs font-bold bg-brand-100 text-brand-700">Standard</span>
+                                    <button onclick="deleteClass('${c.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // STREAMING_CHUNK:Implementing assignments and generator engines...
+        function renderAssignments(container) {
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-3">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Penugasan Mengampu & Split Jam</h2>
+                            <p class="text-xs text-slate-500">Alokasikan tugas mengajar guru dengan pembagian split jam (2+1, 2+2, 3+2, 3, dll) atau Impor Excel Matrix.</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="downloadExcelMatrixTemplate()" class="px-3 py-2 bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-200 flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-excel text-emerald-600"></i> Unduh Format Excel Matrix
+                            </button>
+                            <button onclick="triggerExcelMatrixImport()" class="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-xl shadow hover:bg-emerald-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-import"></i> Impor Matrix Excel (.xlsx)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Excel Matrix Upload Banner -->
+                    <div class="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg font-bold shadow-md">
+                                <i class="fa-solid fa-file-excel"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-xs text-emerald-900">Format Matrix ascTimetables Excel Diterima</h4>
+                                <p class="text-[11px] text-emerald-700">Mendukung format spreadsheet: Teacher Code | Teacher Name | Subject | Split | Vol Rombel | [Kolom Kelas/Rombel...]</p>
+                            </div>
+                        </div>
+                        <button onclick="triggerExcelMatrixImport()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow">
+                            Upload File Matrix Excel
+                        </button>
+                    </div>
+
+                    <!-- Quick Assign Form -->
+                    <div class="p-4 bg-brand-50/60 rounded-2xl border border-brand-100 space-y-4">
+                        <div class="font-bold text-xs text-brand-700 uppercase tracking-wider">Quick Assign / Penugasan Manual</div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <select id="asgnTeacher" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                                <option value="">-- Pilih Guru --</option>
+                                ${state.teachers.map(t => `<option value="${t.id}">${t.code} - ${t.name}</option>`).join('')}
+                            </select>
+                            <select id="asgnSubject" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                                <option value="">-- Pilih Mapel --</option>
+                                ${state.subjects.map(s => `<option value="${s.id}">[${s.category}] ${s.code} - ${s.name}</option>`).join('')}
+                            </select>
+                            <input type="number" id="asgnHours" placeholder="Total JP (Misal: 5)" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                            <input type="text" id="asgnSplit" placeholder="Split Pattern (Misal: 3,2)" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                        </div>
+                        
+                        <div class="flex items-center gap-3">
+                            <button onclick="quickAssignAllGrade('X')" class="px-3 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700">Terapkan ke Seluruh Tingkat X (50 JP)</button>
+                            <button onclick="quickAssignAllGrade('XI')" class="px-3 py-2 bg-slate-700 text-white rounded-xl text-xs font-bold hover:bg-slate-800">Terapkan ke Tingkat XI/XII (48 JP)</button>
+                        </div>
+                    </div>
+
+                    <!-- Assignment List -->
+                    <div class="space-y-2">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Daftar Penugasan Aktif (${state.assignments.length})</div>
+                        ${state.assignments.map(a => {
+                            const t = state.teachers.find(x => x.id === a.teacherId);
+                            const s = state.subjects.find(x => x.id === a.subjectId);
+                            return `
+                                <div class="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between text-xs">
+                                    <div>
+                                        <span class="font-bold text-slate-800">${t ? t.name : ''}</span> mengampu <span class="font-bold text-brand-600">${s ? s.name : ''}</span> 
+                                        di <span class="font-semibold text-emerald-600">${a.classIds.join(', ')}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-1 bg-white border rounded-lg font-bold">${a.totalHours} JP</span>
+                                        <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold">Split: [${a.splitPattern.join(', ')}]</span>
+                                        <button onclick="deleteAssignment('${a.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGenerator(container) {
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Otomatisasi Generator Jadwal</h2>
+                            <p class="text-xs text-slate-500">Penyusunan jadwal otomatis mempertimbangkan slot piket & bebas bentrok.</p>
+                        </div>
+                        <button onclick="generateSchedulesAuto()" class="px-6 py-3 bg-gradient-to-r from-brand-600 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:opacity-95 text-xs">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Jalankan Auto-Generate
+                        </button>
+                    </div>
+
+                    <div id="genStatus" class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+                        Status: <span class="font-bold text-slate-800">${state.schedules.length > 0 ? `Telah dibuat ${state.schedules.length} slot jadwal.` : 'Jadwal belum dikomputasi.'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // STREAMING_CHUNK:Rendering ascTimetables grid matrix view...
+        function renderMatrix(container) {
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-slate-500">Tema Visual:</span>
+                            <select onchange="changeMatrixTheme(this.value)" class="px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold">
+                                <option value="theme-classic">Classic asc</option>
+                                <option value="theme-corporate">Corporate Blue</option>
+                                <option value="theme-emerald">Emerald Modern</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-slate-500">Mode Tampilan Kartu:</span>
+                            <button onclick="toggleDisplayMode('code')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${state.activeDisplayMode === 'code' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700'}">Kode Mapel/Guru</button>
+                            <button onclick="toggleDisplayMode('full')" class="px-3 py-1.5 rounded-xl text-xs font-bold ${state.activeDisplayMode === 'full' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700'}">Nama Lengkap</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto p-4">
+                        <table class="w-full border-collapse text-center text-xs">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 font-bold">
+                                    <th class="p-2 border border-slate-200 w-24">Hari / Jam</th>
+                                    ${state.classes.map(c => `<th class="p-2 border border-slate-200 min-w-[120px]">${c.code}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${DAYS.map(day => {
+                                    return Array.from({ length: PERIODS_PER_DAY }, (_, i) => i + 1).map(p => {
+                                        const isBreak = (p === BREAK_PERIOD);
+                                        return `
+                                            <tr class="${isBreak ? 'bg-amber-50/80 font-bold text-amber-800' : ''}">
+                                                ${p === 1 ? `<td rowspan="${PERIODS_PER_DAY}" class="p-2 border border-slate-200 bg-slate-50 font-bold text-slate-800 align-middle">${day}</td>` : ''}
+                                                ${isBreak ? `<td colspan="${state.classes.length}" class="p-2 border border-slate-200 text-center tracking-widest uppercase text-[10px]">--- Istirahat ---</td>` : 
+                                                    state.classes.map(c => {
+                                                        const sch = state.schedules.find(s => s.day === day && s.period === p && s.classId === c.id);
+                                                        const subj = sch ? state.subjects.find(x => x.id === sch.subjectId) : null;
+                                                        const tchr = sch ? state.teachers.find(x => x.id === sch.teacherId) : null;
+                                                        return `
+                                                            <td class="p-1 border border-slate-200 h-12">
+                                                                ${sch ? `
+                                                                    <div class="h-full p-1 rounded-lg text-white font-bold flex flex-col justify-center items-center shadow-sm text-[10px]" style="background-color: ${subj ? subj.color : '#3b82f6'}">
+                                                                        <span>${state.activeDisplayMode === 'code' ? `${tchr ? tchr.code : ''} / ${subj ? subj.code : ''}` : subj ? subj.name : ''}</span>
+                                                                    </div>
+                                                                ` : '<span class="text-slate-300">-</span>'}
+                                                            </td>
+                                                        `;
+                                                    }).join('')
+                                                }
+                                            </tr>
+                                        `;
+                                    }).join('');
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        // STREAMING_CHUNK:Implementing Print Engine (A4/A3, Per Guru, Per Rombel, Master)...
+        function renderPrint(container) {
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-4 no-print">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Cetak & Ekspor Jadwal Pelajaran</h2>
+                            <p class="text-xs text-slate-500">Pilih mode cetak (Seluruh, Per Guru, Per Rombel) dan ukuran kertas (A4 / A3).</p>
+                        </div>
+                        <button onclick="triggerPrintProcess()" class="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black shadow flex items-center gap-2">
+                            <i class="fa-solid fa-print"></i> Cetak Dokumen
+                        </button>
+                    </div>
+
+                    <div class="no-print grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Mode Tampilan Cetak</label>
+                            <select onchange="updatePrintMode(this.value)" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                                <option value="all" ${state.printMode === 'all' ? 'selected' : ''}>Cetak Seluruh Matriks (Master)</option>
+                                <option value="teacher" ${state.printMode === 'teacher' ? 'selected' : ''}>Cetak Per-Guru Individual</option>
+                                <option value="class" ${state.printMode === 'class' ? 'selected' : ''}>Cetak Per-Rombel / Kelas</option>
+                            </select>
+                        </div>
+
+                        <div id="printSelectContainer">
+                            ${getPrintFilterHTML()}
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Ukuran Kertas</label>
+                            <select onchange="updatePrintPaper(this.value)" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                                <option value="a4" ${state.printPaperSize === 'a4' ? 'selected' : ''}>Kertas A4 (Lanskap)</option>
+                                <option value="a3" ${state.printPaperSize === 'a3' ? 'selected' : ''}>Kertas A3 (Lanskap)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="printOutputArea" class="print-container space-y-8">
+                        ${renderPrintableContent()}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getPrintFilterHTML() {
+            if (state.printMode === 'teacher') {
+                return `
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Guru</label>
+                    <select onchange="updatePrintSelectedId(this.value)" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                        <option value="all">-- Semua Guru --</option>
+                        ${state.teachers.map(t => `<option value="${t.id}" ${state.printSelectedId === t.id ? 'selected' : ''}>${t.code} - ${t.name}</option>`).join('')}
+                    </select>
+                `;
+            } else if (state.printMode === 'class') {
+                return `
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Rombel / Kelas</label>
+                    <select onchange="updatePrintSelectedId(this.value)" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white">
+                        <option value="all">-- Semua Rombel --</option>
+                        ${state.classes.map(c => `<option value="${c.id}" ${state.printSelectedId === c.id ? 'selected' : ''}>${c.code} (${c.name})</option>`).join('')}
+                    </select>
+                `;
+            }
+            return `<div class="text-xs text-slate-400 self-center pt-5">Menampilkan Seluruh Matriks Jadwal</div>`;
+        }
+
+        window.updatePrintMode = function(val) {
+            state.printMode = val;
+            state.printSelectedId = 'all';
+            renderPrint(document.getElementById('mainContainer'));
+        };
+
+        window.updatePrintSelectedId = function(val) {
+            state.printSelectedId = val;
+            renderPrint(document.getElementById('mainContainer'));
+        };
+
+        window.updatePrintPaper = function(val) {
+            state.printPaperSize = val;
+            renderPrint(document.getElementById('mainContainer'));
+        };
+
+        window.triggerPrintProcess = function() {
+            window.print();
+        };
+
+        function renderPrintableContent() {
+            if (state.printMode === 'all') {
+                return `
+                    <div class="text-center border-b pb-4 mb-4">
+                        <h1 class="text-xl font-black uppercase tracking-wide">JADWAL PELAJARAN MASTER SEKOLAH</h1>
+                        <p class="text-xs text-slate-500">Tahun Ajaran 2026/2027 • Standard Alokasi Jam Pelajaran</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse text-center text-[10px] border border-slate-300">
+                            <thead>
+                                <tr class="bg-slate-100 font-bold">
+                                    <th class="p-1 border border-slate-300">Hari / Jam</th>
+                                    ${state.classes.map(c => `<th class="p-1 border border-slate-300">${c.code}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${DAYS.map(day => {
+                                    return Array.from({ length: PERIODS_PER_DAY }, (_, i) => i + 1).map(p => {
+                                        const isBreak = (p === BREAK_PERIOD);
+                                        return `
+                                            <tr>
+                                                ${p === 1 ? `<td rowspan="${PERIODS_PER_DAY}" class="p-1 border border-slate-300 font-bold bg-slate-50 align-middle">${day}</td>` : ''}
+                                                ${isBreak ? `<td colspan="${state.classes.length}" class="p-1 border border-slate-300 text-center font-bold bg-amber-50">--- ISTIRAHAT ---</td>` : 
+                                                    state.classes.map(c => {
+                                                        const sch = state.schedules.find(s => s.day === day && s.period === p && s.classId === c.id);
+                                                        const subj = sch ? state.subjects.find(x => x.id === sch.subjectId) : null;
+                                                        const tchr = sch ? state.teachers.find(x => x.id === sch.teacherId) : null;
+                                                        return `
+                                                            <td class="p-1 border border-slate-300 font-semibold">
+                                                                ${sch ? `${tchr ? tchr.code : ''}/${subj ? subj.code : ''}` : '-'}
+                                                            </td>
+                                                        `;
+                                                    }).join('')
+                                                }
+                                            </tr>
+                                        `;
+                                    }).join('');
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (state.printMode === 'teacher') {
+                const targetTeachers = state.printSelectedId === 'all' ? state.teachers : state.teachers.filter(t => t.id === state.printSelectedId);
+                return targetTeachers.map(t => `
+                    <div class="paper-page border-b border-dashed pb-8 mb-8">
+                        <div class="text-center pb-2 mb-3">
+                            <h2 class="text-base font-bold uppercase">JADWAL MENGAJAR INDIVIDUAL GURU</h2>
+                            <p class="text-xs font-semibold text-brand-600">${t.name} (Kode: ${t.code} / NIP: ${t.nip || '-'})</p>
+                        </div>
+                        <table class="w-full border-collapse text-center text-xs border border-slate-300">
+                            <thead>
+                                <tr class="bg-slate-100 font-bold">
+                                    <th class="p-2 border border-slate-300">Jam Ke-</th>
+                                    ${DAYS.map(d => `<th class="p-2 border border-slate-300">${d}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Array.from({ length: PERIODS_PER_DAY }, (_, i) => i + 1).map(p => `
+                                    <tr>
+                                        <td class="p-2 border border-slate-300 font-bold bg-slate-50">${p}</td>
+                                        ${DAYS.map(d => {
+                                            if (p === BREAK_PERIOD) return `<td class="p-1 border border-slate-300 bg-amber-50 text-amber-800 font-bold text-[10px]">ISTIRAHAT</td>`;
+                                            const sch = state.schedules.find(s => s.day === d && s.period === p && s.teacherId === t.id);
+                                            const cls = sch ? state.classes.find(c => c.id === sch.classId) : null;
+                                            const sbj = sch ? state.subjects.find(s => s.id === sch.subjectId) : null;
+                                            return `
+                                                <td class="p-2 border border-slate-300">
+                                                    ${sch ? `<span class="font-bold">${cls ? cls.code : ''}</span><br><span class="text-[10px] text-slate-500">${sbj ? sbj.code : ''}</span>` : '-'}
+                                                </td>
+                                            `;
+                                        }).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `).join('');
+            } else if (state.printMode === 'class') {
+                const targetClasses = state.printSelectedId === 'all' ? state.classes : state.classes.filter(c => c.id === state.printSelectedId);
+                return targetClasses.map(c => `
+                    <div class="paper-page border-b border-dashed pb-8 mb-8">
+                        <div class="text-center pb-2 mb-3">
+                            <h2 class="text-base font-bold uppercase">JADWAL PELAJARAN KELAS</h2>
+                            <p class="text-xs font-semibold text-emerald-600">${c.name} (${c.code}) • Tingkat ${c.grade}</p>
+                        </div>
+                        <table class="w-full border-collapse text-center text-xs border border-slate-300">
+                            <thead>
+                                <tr class="bg-slate-100 font-bold">
+                                    <th class="p-2 border border-slate-300">Jam Ke-</th>
+                                    ${DAYS.map(d => `<th class="p-2 border border-slate-300">${d}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Array.from({ length: PERIODS_PER_DAY }, (_, i) => i + 1).map(p => `
+                                    <tr>
+                                        <td class="p-2 border border-slate-300 font-bold bg-slate-50">${p}</td>
+                                        ${DAYS.map(d => {
+                                            if (p === BREAK_PERIOD) return `<td class="p-1 border border-slate-300 bg-amber-50 text-amber-800 font-bold text-[10px]">ISTIRAHAT</td>`;
+                                            const sch = state.schedules.find(s => s.day === d && s.period === p && s.classId === c.id);
+                                            const tchr = sch ? state.teachers.find(t => t.id === sch.teacherId) : null;
+                                            const sbj = sch ? state.subjects.find(s => s.id === sch.subjectId) : null;
+                                            return `
+                                                <td class="p-2 border border-slate-300">
+                                                    ${sch ? `<span class="font-bold">${sbj ? sbj.name : ''}</span><br><span class="text-[10px] text-slate-500">${tchr ? tchr.name : ''}</span>` : '-'}
+                                                </td>
+                                            `;
+                                        }).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // STREAMING_CHUNK:Implementing modal handlers for CRUD actions...
+        window.closeDataModal = function() {
+            const modal = document.getElementById('dataModal');
+            if (modal) modal.classList.add('hidden');
+        };
+
+        window.openAddTeacherModal = function() {
+            modalActionType = 'teacher';
+            document.getElementById('modalTitle').textContent = 'Tambah Data Guru Baru';
+            document.getElementById('modalSub').textContent = 'Isi rincian informasi guru beserta hari piket.';
+            
+            document.getElementById('modalFormFields').innerHTML = `
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Guru</label>
+                    <input type="text" id="mTeacherCode" placeholder="Contoh: G-07" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">NIP Guru</label>
+                    <input type="text" id="mTeacherNip" placeholder="1980xxxxxxxxxxxx" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap & Gelar</label>
+                    <input type="text" id="mTeacherName" placeholder="Contoh: Dr. H. Ahmad Fauzi, M.Pd" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Hari Piket (Kosong Mengajar)</label>
+                    <select id="mTeacherPicket" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                        <option value="">Tidak Ada Piket</option>
+                        ${DAYS.map(d => `<option value="${d}">${d}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Maksimal Jam Mengajar / Minggu</label>
+                    <input type="number" id="mTeacherMax" value="30" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+            `;
+            document.getElementById('dataModal').classList.remove('hidden');
+        };
+
+        window.openAddSubjectModal = function() {
+            modalActionType = 'subject';
+            document.getElementById('modalTitle').textContent = 'Tambah Mata Pelajaran';
+            document.getElementById('modalSub').textContent = 'Tambahkan mapel dan tentukan kelompok mapel.';
+
+            document.getElementById('modalFormFields').innerHTML = `
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Mapel</label>
+                    <input type="text" id="mSubCode" placeholder="Contoh: BIO" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mata Pelajaran</label>
+                    <input type="text" id="mSubName" placeholder="Contoh: Biologi Wajib" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Kelompok Mapel</label>
+                    <select id="mSubCat" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                        <option value="Umum">Kelompok Mapel Umum</option>
+                        <option value="Kejuruan">Kelompok Mapel Kejuruan</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Warna Indikator Matriks</label>
+                    <input type="color" id="mSubColor" value="#3b82f6" class="w-full h-10 border border-slate-200 rounded-xl cursor-pointer">
+                </div>
+            `;
+            document.getElementById('dataModal').classList.remove('hidden');
+        };
+
+        window.openAddCompetencyModal = function() {
+            modalActionType = 'competency';
+            document.getElementById('modalTitle').textContent = 'Tambah Kompetensi Keahlian';
+            document.getElementById('modalSub').textContent = 'Tambahkan jurusan baru di sekolah.';
+
+            document.getElementById('modalFormFields').innerHTML = `
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Jurusan</label>
+                    <input type="text" id="mCompCode" placeholder="Contoh: TKR" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Kompetensi Keahlian</label>
+                    <input type="text" id="mCompName" placeholder="Contoh: Teknik Kendaraan Ringan" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+            `;
+            document.getElementById('dataModal').classList.remove('hidden');
+        };
+
+        window.openAddClassModal = function() {
+            modalActionType = 'class';
+            document.getElementById('modalTitle').textContent = 'Tambah Rombel / Kelas';
+            document.getElementById('modalSub').textContent = 'Tambahkan rombel dan alokasi JP otomatis.';
+
+            document.getElementById('modalFormFields').innerHTML = `
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Rombel</label>
+                    <input type="text" id="mClassCode" placeholder="Contoh: X-TKR-1" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Kelas</label>
+                    <input type="text" id="mClassName" placeholder="Contoh: Kelas X TKR 1" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Tingkat Kelas</label>
+                    <select id="mClassGrade" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                        <option value="X">Tingkat X (Target: 50 JP)</option>
+                        <option value="XI">Tingkat XI (Target: 48 JP)</option>
+                        <option value="XII">Tingkat XII (Target: 48 JP)</option>
+                    </select>
+                </div>
+            `;
+            document.getElementById('dataModal').classList.remove('hidden');
+        };
+
+        window.handleModalSubmit = function(e) {
+            e.preventDefault();
+            if (modalActionType === 'teacher') {
+                const code = document.getElementById('mTeacherCode').value.trim();
+                const nip = document.getElementById('mTeacherNip').value.trim();
+                const name = document.getElementById('mTeacherName').value.trim();
+                const picket = document.getElementById('mTeacherPicket').value;
+                const maxH = parseInt(document.getElementById('mTeacherMax').value) || 30;
+
+                state.teachers.push({
+                    id: `G${Date.now()}`,
+                    code,
+                    nip,
+                    name,
+                    picketDays: picket ? [picket] : [],
+                    maxHours: maxH
+                });
+                closeDataModal();
+                navigateTo('teachers');
+                showToast('Guru berhasil ditambahkan!', 'success');
+            } else if (modalActionType === 'subject') {
+                const code = document.getElementById('mSubCode').value.trim();
+                const name = document.getElementById('mSubName').value.trim();
+                const category = document.getElementById('mSubCat').value;
+                const color = document.getElementById('mSubColor').value;
+
+                state.subjects.push({ id: code, code, name, category, color });
+                closeDataModal();
+                navigateTo('subjects');
+                showToast('Mata Pelajaran ditambahkan!', 'success');
+            } else if (modalActionType === 'competency') {
+                const code = document.getElementById('mCompCode').value.trim();
+                const name = document.getElementById('mCompName').value.trim();
+
+                state.competencies.push({ id: code, code, name });
+                closeDataModal();
+                navigateTo('competencies');
+                showToast('Jurusan berhasil ditambahkan!', 'success');
+            } else if (modalActionType === 'class') {
+                const code = document.getElementById('mClassCode').value.trim();
+                const name = document.getElementById('mClassName').value.trim();
+                const grade = document.getElementById('mClassGrade').value;
+                const maxWeeklyHours = grade === 'X' ? 50 : 48;
+
+                state.classes.push({ id: code, code, name, grade, maxWeeklyHours });
+                closeDataModal();
+                navigateTo('classes');
+                showToast('Rombel berhasil ditambahkan!', 'success');
+            }
+        };
+
+        // STREAMING_CHUNK:Implementing Excel Matrix Import & Parsing Logic...
+        window.triggerExcelMatrixImport = function() {
+            document.getElementById('excelMatrixFileInput').click();
+        };
+
+        window.handleExcelMatrixFileSelected = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    parseExcelMatrixData(rows);
+                } catch(err) {
+                    console.error('Excel Import Error:', err);
+                    showToast('Gagal membaca file Excel. Pastikan format file sesuai.', 'info');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        function parseExcelMatrixData(rows) {
+            if (!rows || rows.length < 2) {
+                showToast('File Excel kosong atau tidak valid.', 'info');
+                return;
+            }
+
+            let headerRowIdx = -1;
+            for (let i = 0; i < Math.min(10, rows.length); i++) {
+                const rowStr = rows[i].join(' ').toLowerCase();
+                if (rowStr.includes('teacher') || rowStr.includes('guru') || rowStr.includes('subject') || rowStr.includes('mapel')) {
+                    headerRowIdx = i;
+                    break;
+                }
+            }
+
+            if (headerRowIdx === -1) headerRowIdx = 0;
+
+            const headerRow = rows[headerRowIdx];
+            
+            let teacherCodeCol = -1;
+            let teacherNameCol = -1;
+            let subjectCol = -1;
+            let splitCol = -1;
+
+            for (let col = 0; col < headerRow.length; col++) {
+                const val = String(headerRow[col] || '').trim().toLowerCase();
+                if (val.includes('code') || val.includes('kode')) teacherCodeCol = col;
+                else if (val.includes('teacher') || val.includes('nama guru') || val.includes('guru')) teacherNameCol = col;
+                else if (val.includes('subject') || val.includes('mapel')) subjectCol = col;
+                else if (val.includes('split')) splitCol = col;
+            }
+
+            if (teacherCodeCol === -1) teacherCodeCol = 0;
+            if (teacherNameCol === -1) teacherNameCol = 1;
+            if (subjectCol === -1) subjectCol = 2;
+            if (splitCol === -1) splitCol = 3;
+
+            const classStartCol = Math.max(teacherCodeCol, teacherNameCol, subjectCol, splitCol) + 2;
+
+            const classHeaders = [];
+            for (let col = classStartCol; col < headerRow.length; col++) {
+                const classCode = String(headerRow[col] || '').trim();
+                if (classCode) {
+                    classHeaders.push({ colIdx: col, code: classCode });
+                }
+            }
+
+            if (classHeaders.length === 0) {
+                showToast('Tidak ditemukan kolom nama Rombel/Kelas pada file Excel.', 'info');
+                return;
+            }
+
+            let teachersAdded = 0;
+            let subjectsAdded = 0;
+            let classesAdded = 0;
+            let assignmentsAdded = 0;
+
+            classHeaders.forEach(ch => {
+                const cleanCode = ch.code.replace(/\s+/g, '-').toUpperCase();
+                let existingCls = state.classes.find(c => c.code.toLowerCase() === cleanCode.toLowerCase() || c.code.toLowerCase() === ch.code.toLowerCase());
+                if (!existingCls) {
+                    const grade = cleanCode.startsWith('10') || cleanCode.startsWith('X-') || cleanCode.startsWith('X') ? 'X' : (cleanCode.startsWith('11') || cleanCode.startsWith('XI') ? 'XI' : 'XII');
+                    const newClass = {
+                        id: `CLS_${cleanCode}`,
+                        code: ch.code,
+                        name: `Kelas ${ch.code}`,
+                        grade: grade,
+                        maxWeeklyHours: grade === 'X' ? 50 : 48
+                    };
+                    state.classes.push(newClass);
+                    classesAdded++;
+                }
+            });
+
+            let currentTeacherCode = '';
+            let currentTeacherName = '';
+
+            for (let r = headerRowIdx + 1; r < rows.length; r++) {
+                const row = rows[r];
+                if (!row || row.length === 0) continue;
+
+                let code = String(row[teacherCodeCol] || '').trim();
+                let name = String(row[teacherNameCol] || '').trim();
+                let subjectName = String(row[subjectCol] || '').trim();
+
+                if (code) currentTeacherCode = code;
+                if (name) currentTeacherName = name;
+
+                if (!subjectName) continue;
+
+                let teacherObj = state.teachers.find(t => t.code.toLowerCase() === currentTeacherCode.toLowerCase() || t.name.toLowerCase() === currentTeacherName.toLowerCase());
+                if (!teacherObj && (currentTeacherCode || currentTeacherName)) {
+                    teacherObj = {
+                        id: `G_${Date.now()}_${r}`,
+                        code: currentTeacherCode || `G-${state.teachers.length + 1}`,
+                        name: currentTeacherName || currentTeacherCode,
+                        nip: '',
+                        picketDays: [],
+                        maxHours: 32
+                    };
+                    state.teachers.push(teacherObj);
+                    teachersAdded++;
+                }
+
+                let subjectObj = state.subjects.find(s => s.name.toLowerCase() === subjectName.toLowerCase() || s.code.toLowerCase() === subjectName.toLowerCase());
+                if (!subjectObj) {
+                    const subCode = subjectName.substring(0, 5).toUpperCase().replace(/\s+/g, '');
+                    subjectObj = {
+                        id: `SUB_${Date.now()}_${r}`,
+                        code: subCode,
+                        name: subjectName,
+                        category: 'Kejuruan',
+                        color: '#' + Math.floor(Math.random()*16777215).toString(16)
+                    };
+                    state.subjects.push(subjectObj);
+                    subjectsAdded++;
+                }
+
+                const assignedClassIds = [];
+                let totalJP = 0;
+
+                classHeaders.forEach(ch => {
+                    const jpVal = parseInt(row[ch.colIdx]);
+                    if (!isNaN(jpVal) && jpVal > 0) {
+                        const targetCls = state.classes.find(c => c.code.toLowerCase() === ch.code.toLowerCase());
+                        if (targetCls) {
+                            assignedClassIds.push(targetCls.id);
+                            totalJP = Math.max(totalJP, jpVal);
+                        }
+                    }
+                });
+
+                if (assignedClassIds.length > 0 && teacherObj && subjectObj) {
+                    let splitPattern = [totalJP];
+                    if (totalJP === 2) splitPattern = [2];
+                    else if (totalJP === 3) splitPattern = [2, 1];
+                    else if (totalJP === 4) splitPattern = [2, 2];
+                    else if (totalJP === 5) splitPattern = [3, 2];
+                    else if (totalJP === 6) splitPattern = [3, 3];
+                    else if (totalJP > 6) splitPattern = [4, totalJP - 4];
+
+                    state.assignments.push({
+                        id: `ASN_EXCEL_${Date.now()}_${r}`,
+                        teacherId: teacherObj.id,
+                        subjectId: subjectObj.id,
+                        classIds: assignedClassIds,
+                        totalHours: totalJP,
+                        splitPattern: splitPattern
+                    });
+                    assignmentsAdded++;
+                }
+            }
+
+            navigateTo('assignments');
+            showToast(`Import Matrix Excel Berhasil! +${assignmentsAdded} Penugasan, +${teachersAdded} Guru, +${subjectsAdded} Mapel.`, 'success');
+        }
+
+        window.downloadExcelMatrixTemplate = function() {
+            const sampleData = [
+                ["TEACHER CODE", "TEACHER NAME", "SUBJECT", "SET SPLIT", "VOL ROMBEL", "X TKP", "X DPIB", "X TKR 1", "X TKR 2", "XII DPIB", "XII TKJ 1"],
+                ["J4", "Bertolomeus Reba, S.Pd", "Sejarah", 1, 26, 2, 2, 2, 2, "", ""],
+                ["K", "Maria Elisabeth Bhiju, A.Md", "Produk Kreatif dan Kewirausahaan", 3, 32, "", "", "", "", 8, 8],
+                ["L", "Egnisius Rawi, ST", "Konstruksi Jalan dan Jembatan", 1, 5, "", "", "", "", 5, ""],
+                ["L", "Egnisius Rawi, ST", "Dasar-dasar Program Keahlian", 1, 4, 4, "", "", "", "", ""],
+                ["L1", "Petrus Bhoko, S.Pd", "Estimasi Biaya Konstruksi dan Properti", 1, 5, "", "", "", "", 5, ""]
+            ];
+
+            const ws = XLSX.utils.aoa_to_sheet(sampleData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Pembagian_Jam");
+            XLSX.writeFile(wb, "Template_Pembagian_Jam_Guru_ascTimetables.xlsx");
+            showToast('Template Excel Pembagian Jam berhasil diunduh!', 'success');
+        };
+
+        // STREAMING_CHUNK:Implementing delete actions & generator logic...
+        window.deleteCompetency = function(id) {
+            state.competencies = state.competencies.filter(c => c.id !== id);
+            navigateTo('competencies');
+            showToast('Jurusan berhasil dihapus.', 'info');
+        };
+
+        window.deleteTeacher = function(id) {
+            state.teachers = state.teachers.filter(t => t.id !== id);
+            navigateTo('teachers');
+            showToast('Data guru dihapus.', 'info');
+        };
+
+        window.deleteSubject = function(id) {
+            state.subjects = state.subjects.filter(s => s.id !== id);
+            navigateTo('subjects');
+            showToast('Mata pelajaran dihapus.', 'info');
+        };
+
+        window.deleteClass = function(id) {
+            state.classes = state.classes.filter(c => c.id !== id);
+            navigateTo('classes');
+            showToast('Rombel dihapus.', 'info');
+        };
+
+        window.deleteAssignment = function(id) {
+            state.assignments = state.assignments.filter(a => a.id !== id);
+            navigateTo('assignments');
+            showToast('Penugasan dihapus.', 'info');
+        };
+
+        window.quickAssignAllGrade = function(grade) {
+            const teacherId = document.getElementById('asgnTeacher').value;
+            const subjectId = document.getElementById('asgnSubject').value;
+            const totalHours = parseInt(document.getElementById('asgnHours').value) || 4;
+            const splitInput = document.getElementById('asgnSplit').value || '2,2';
+
+            if (!teacherId || !subjectId) {
+                showToast('Pilih Guru dan Mapel terlebih dahulu!', 'info');
+                return;
+            }
+
+            const targetClasses = state.classes.filter(c => grade === 'X' ? c.grade === 'X' : (c.grade === 'XI' || c.grade === 'XII')).map(c => c.id);
+            const splitPattern = splitInput.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+
+            state.assignments.push({
+                id: `ASN_${Date.now()}`,
+                teacherId,
+                subjectId,
+                classIds: targetClasses,
+                totalHours,
+                splitPattern
+            });
+
+            navigateTo('assignments');
+            showToast(`Penugasan Massal Tingkat ${grade} Berhasil!`, 'success');
+        };
+
+        window.generateSchedulesAuto = function() {
+            state.schedules = [];
+            state.assignments.forEach(asn => {
+                asn.classIds.forEach(classId => {
+                    let patternIndex = 0;
+                    DAYS.forEach(day => {
+                        const teacher = state.teachers.find(t => t.id === asn.teacherId);
+                        if (teacher && teacher.picketDays.includes(day)) return;
+
+                        for (let p = 1; p <= PERIODS_PER_DAY; p++) {
+                            if (p === BREAK_PERIOD) continue;
+                            
+                            const chunk = asn.splitPattern[patternIndex] || 2;
+                            const occupied = state.schedules.some(s => s.day === day && s.period === p && (s.classId === classId || s.teacherId === asn.teacherId));
+
+                            if (!occupied && patternIndex < asn.splitPattern.length) {
+                                for (let k = 0; k < chunk; k++) {
+                                    if (p + k <= PERIODS_PER_DAY && (p + k) !== BREAK_PERIOD) {
+                                        state.schedules.push({
+                                            day,
+                                            period: p + k,
+                                            classId,
+                                            subjectId: asn.subjectId,
+                                            teacherId: asn.teacherId
+                                        });
+                                    }
+                                }
+                                patternIndex++;
+                                p += (chunk - 1);
+                            }
+                        }
+                    });
+                });
+            });
+
+            navigateTo('generator');
+            showToast('Auto-Generate Jadwal Bebas Bentrok Selesai!', 'success');
+        };
+
+        window.changeMatrixTheme = function(theme) {
+            state.activeMatrixTheme = theme;
+            renderMatrix(document.getElementById('mainContainer'));
+        };
+
+        window.toggleDisplayMode = function(mode) {
+            state.activeDisplayMode = mode;
+            renderMatrix(document.getElementById('mainContainer'));
+        };
+
+        // STREAMING_CHUNK:Bootstrapping application initialization on window load...
+        window.onload = function() {
+            updateUserUI();
+            navigateTo('dashboard');
+        };
+    </script>
+</body>
+</html>
+```eof
